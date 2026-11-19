@@ -1,8 +1,13 @@
 'use client';
 
-import { useCallback, useMemo } from 'react';
+import { useCallback, useContext, useMemo } from 'react';
+import { WalletContext } from '@/hooks/useWallet';
+import { useSubscriptionNotes } from '@/hooks/useSubscriptionNotes';
+import type { Network } from '@/types';
 
 export interface Subscriber {
+  /** Subscription id, used to key the merchant's private notes. */
+  id?: number | string;
   address: string;
   tokenSymbol: string;
   tokenAddress: string;
@@ -17,6 +22,8 @@ interface SubscriberTableProps {
   subscribers: Subscriber[];
   /** Optional filename for the CSV download. */
   fileName?: string;
+  /** Network the notes are stored under; defaults to the connected wallet's. */
+  network?: Network;
 }
 
 /**
@@ -90,7 +97,15 @@ function buildCsv(subscribers: Subscriber[]): string {
     .join('\r\n');
 }
 
-export default function SubscriberTable({ subscribers, fileName = 'subscribers.csv' }: SubscriberTableProps) {
+export default function SubscriberTable({
+  subscribers,
+  fileName = 'subscribers.csv',
+  network,
+}: SubscriberTableProps) {
+  const wallet = useContext(WalletContext);
+  const notesNetwork = network ?? wallet?.network ?? 'testnet';
+  const { getNote, setNote } = useSubscriptionNotes(notesNetwork);
+
   const rows = useMemo(
     () =>
       subscribers.map((subscriber) => ({
@@ -138,30 +153,47 @@ export default function SubscriberTable({ subscribers, fileName = 'subscribers.c
             <th scope="col">Raw Amount</th>
             <th scope="col">Formatted Amount</th>
             <th scope="col">Status</th>
+            <th scope="col">Note</th>
           </tr>
         </thead>
         <tbody>
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={6}>No subscribers yet.</td>
+              <td colSpan={7}>No subscribers yet.</td>
             </tr>
           ) : (
-            rows.map((row) => (
-              <tr key={`${row.address}-${row.tokenAddress}`}>
-                <td>
-                  <code>{row.address}</code>
-                </td>
-                <td>{row.tokenSymbol}</td>
-                <td>
-                  <code>{row.tokenAddress}</code>
-                </td>
-                <td>
-                  <code>{row.rawDisplay}</code>
-                </td>
-                <td>{row.formattedDisplay}</td>
-                <td>{row.status}</td>
-              </tr>
-            ))
+            rows.map((row) => {
+              const noteKey = row.id ?? `${row.address}-${row.tokenAddress}`;
+              return (
+                <tr key={`${row.address}-${row.tokenAddress}`}>
+                  <td>
+                    <code>{row.address}</code>
+                  </td>
+                  <td>{row.tokenSymbol}</td>
+                  <td>
+                    <code>{row.tokenAddress}</code>
+                  </td>
+                  <td>
+                    <code>{row.rawDisplay}</code>
+                  </td>
+                  <td>{row.formattedDisplay}</td>
+                  <td>{row.status}</td>
+                  <td>
+                    <input
+                      // Re-key per network and subscription so switching either
+                      // shows the note stored for that pair.
+                      key={`${notesNetwork}:${noteKey}`}
+                      type="text"
+                      defaultValue={getNote(noteKey)}
+                      onBlur={(event) => setNote(noteKey, event.target.value)}
+                      placeholder="Add a note"
+                      aria-label={`Note for subscriber ${row.address}`}
+                      className="w-full min-w-40 rounded border border-gray-300 px-2 py-1 text-sm"
+                    />
+                  </td>
+                </tr>
+              );
+            })
           )}
         </tbody>
       </table>
