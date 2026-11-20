@@ -39,6 +39,42 @@ describe("useAsync", () => {
     expect(result.current.data).toBe("second-result");
   });
 
+  it("does not update state after unmount", async () => {
+    let resolveLoader: (value: string) => void = () => {};
+    const loader = vi.fn(
+      () =>
+        new Promise<string>((resolve) => {
+          resolveLoader = resolve;
+        }),
+    );
+
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    const { unmount } = renderHook(() => useAsync(loader, []));
+
+    expect(loader).toHaveBeenCalledTimes(1);
+
+    unmount();
+
+    await act(async () => {
+      resolveLoader("late-result");
+      await Promise.resolve();
+    });
+
+    const unmountedWarning = consoleError.mock.calls.some((args) =>
+      args.some(
+        (arg) =>
+          typeof arg === "string" &&
+          arg.includes("unmounted component"),
+      ),
+    );
+    expect(unmountedWarning).toBe(false);
+
+    consoleError.mockRestore();
+  });
+
   it("re-runs the loader when reload is called", async () => {
     const loader = vi
       .fn<[], Promise<string>>()
