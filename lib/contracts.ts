@@ -279,6 +279,8 @@ export async function getRegistryStats(network: Network): Promise<RegistryStats>
 // ---- token reads ----
 
 const tokenCache = new Map<string, Promise<TokenInfo>>();
+/** In-flight token reads, so concurrent callers share one set of network calls. */
+const tokenInflight = new Map<string, Promise<TokenInfo>>();
 
 /** A SEP-41 contract id: `C` followed by 55 base-32 characters. */
 const CONTRACT_ID_RE = /^C[A-Z2-7]{55}$/;
@@ -306,32 +308,36 @@ export function getTokenInfo(network: Network, token: string): Promise<TokenInfo
     );
   }
   const key = `${network}:${contractId}`;
-  let cached = tokenCache.get(key);
-  if (!cached) {
-    cached = (async () => {
-      let symbol: string;
-      let name: string;
-      let decimals: number;
-      try {
-        [symbol, name, decimals] = await Promise.all([
-          readContract<string>(network, contractId, "symbol", [], TOKEN_ERRORS),
-          readContract<string>(network, contractId, "name", [], TOKEN_ERRORS),
-          readContract<number>(network, contractId, "decimals", [], TOKEN_ERRORS),
-        ]);
-      } catch (err) {
-        throw new ContractError(
-          "This token couldn't be read. Check that the address is a SEP-41 token contract on this network.",
-          err instanceof Error ? err.message : String(err),
-        );
-      }
-      // The native asset's SAC reports "native"; people know it as XLM.
-      const display = symbol === "native" ? "XLM" : symbol;
-      return { contractId, symbol: display, name, decimals: Number(decimals) };
-    })();
-    cached.catch(() => tokenCache.delete(key));
-    tokenCache.set(key, cached);
-  }
-  return cached;
+  const cached = tokenCache.get(key);
+  if (cached) return cached;
+  const inflight = tokenInflight.get(key);
+  if (inflight) return inflight;
+  const request = (async () => {
+    let symbol: string;
+    let name: string;
+    let decimals: number;
+    try {
+      [symbol, name, decimals] = await Promise.all([
+        readContract<string>(network, contractId, "symbol", [], TOKEN_ERRORS),
+        readContract<string>(network, contractId, "name", [], TOKEN_ERRORS),
+        readContract<number>(network, contractId, "decimals", [], TOKEN_ERRORS),
+      ]);
+    } catch (err) {
+      throw new ContractError(
+        "This token couldn't be read. Check that the address is a SEP-41 token contract on this network.",
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+    // The native asset's SAC reports "native"; people know it as XLM.
+    const display = symbol === "native" ? "XLM" : symbol;
+    return { contractId, symbol: display, name, decimals: Number(decimals) };
+  })();
+  tokenInflight.set(key, request);
+  request
+    .catch(() => tokenCache.delete(key))
+    .finally(() => tokenInflight.delete(key));
+  tokenCache.set(key, request);
+  return request;
 }
 
 export async function getTokenBalance(network: Network, token: string, owner: string): Promise<bigint> {
