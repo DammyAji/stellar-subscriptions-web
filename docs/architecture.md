@@ -58,9 +58,36 @@ flowchart TD
   4. `confirming`: poll `getTransaction` every 2 seconds for up to 60 seconds.
 
   Because simulation runs before signing, a contract rejection shows up as a message before the wallet is ever asked to sign.
-- `withRetry` retries three times, with backoff, only for transient failures such as rate limits, timeouts and network errors. Contract errors are never retried.
+- `withRetry` retries three times, with backoff, only for transient failures such as rate limits, timeouts and network errors. Contract errors are never retried. See [RPC Reliability](#rpc-reliability) for the exact policy.
 - `ContractError` is the error type the UI can show. It carries a `message` safe for people, an optional raw `detail` for the console, and an optional contract error `code`.
 - `explainError(raw, errors)` maps a simulation failure to a sentence. A `Error(Contract, #n)` string looks up the per-contract table. A balance or trustline message becomes "doesn't hold enough of this token". Anything else becomes a generic network message.
+
+### RPC Reliability
+
+Every RPC call that can fail transiently goes through `withRetry` in `lib/stellar.ts`. This section is for operators running the app against their own RPC node, especially one with rate limits.
+
+**Retry policy**
+
+- **Max 3 attempts** per call (the first try plus up to two retries).
+- **Back-off:** before attempt `n` (0-based), wait `300ms × 2^n` plus up to `200ms` of random jitter. So the delays are roughly 300ms, then 600ms, each with jitter.
+- **Only transient errors are retried:** HTTP 429 / rate-limit responses, timeouts, and network or fetch failures. Contract errors (a simulation that returns a contract rejection) are never retried — they are deterministic and are surfaced immediately through `explainError`.
+- **Non-transient errors fail fast.** Anything that is not recognised as transient is thrown on the first attempt.
+
+**Which calls are wrapped**
+
+`withRetry` wraps the RPC calls that are safe to repeat:
+
+- `simulateTransaction`
+- `getAccount`
+- `getTransaction`
+- `getLatestLedger`
+- `getHealth`
+
+Submission (`sendTransaction`) is not retried blindly; a `TRY_AGAIN_LATER` result becomes a `ContractError` instead, so a transaction is never double-sent by the retry layer.
+
+**What operators should expect**
+
+Behind a rate-limited RPC node, expect **up to 3 attempts per wrapped call**. A burst of reads (for example, several hooks loading at once) can therefore produce up to three times the request volume against your node before the app gives up and shows a network error. If you see repeated 429s exhausting the retries, raise the node's rate limit or point `NEXT_PUBLIC_*_RPC_URL` at a less constrained endpoint.
 
 ### `lib/contracts.ts`: the boundary
 
