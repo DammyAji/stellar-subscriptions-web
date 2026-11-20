@@ -22,14 +22,28 @@ To test wallet flows you need [Freighter](https://www.freighter.app/) set to the
 
 Every pull request must pass all four commands locally before you ask for review.
 
-| Command             | What it checks                                                     |
-| ------------------- | ------------------------------------------------------------------ |
-| `npm run typecheck` | TypeScript (`tsc --noEmit`) across the whole project               |
-| `npm run lint`      | ESLint with `next/core-web-vitals`, plus the rule below            |
-| `npm test`          | Vitest unit and component tests (`vitest run`)                     |
-| `npm run build`     | Production build (`next build`); catches what typecheck cannot     |
+| Command                 | What it checks                                                       |
+| ----------------------- | -------------------------------------------------------------------- |
+| `npm run typecheck`     | TypeScript (`tsc --noEmit`) across the whole project                 |
+| `npm run lint`          | ESLint with `next/core-web-vitals`, plus the rule below              |
+| `npm test`              | Vitest unit and component tests (`vitest run`)                       |
+| `npm run validate:env`  | Checks required env vars; runs automatically as part of `npm run build` |
+| `npm run check:licenses`| Audits third-party licenses against the policy below                 |
+| `npm run build`         | Production build (`next build`); catches what typecheck cannot       |
 
 ESLint rejects `TODO`, `FIXME` and `XXX` comments anywhere in the code. Put the follow-up in an issue and link it instead.
+
+CI runs lint, typecheck, tests, the license check, and the build on every pull request.
+
+Required environment variables are validated by `scripts/validate-env.ts` before every build. A missing `NEXT_PUBLIC_TESTNET_*` or `NEXT_PUBLIC_MAINNET_*` variable fails the build with a clear message instead of surfacing as a silent `null` at runtime.
+
+### Bundle analysis
+
+`npm run analyze` runs `ANALYZE=true next build`, which opens the [@next/bundle-analyzer](https://www.npmjs.com/package/@next/bundle-analyzer) report so you can see which dependency is responsible for a change in bundle size. Use it when a PR grows the bundle. CI uploads the report as an artifact on each run.
+
+### License policy
+
+`npm run check:licenses` (via `license-checker`) rejects dependencies under GPL-2.0, GPL-3.0, and LGPL-2.0, because copyleft licenses can affect distribution of this app. If a package you need falls under one of these, pick a permissively licensed alternative or raise it with the maintainers before adding the dependency.
 
 If you change behaviour, add or update a test next to the file you changed (`*.test.ts` or `*.test.tsx`). Money-related logic in `lib/subscription.ts` and `lib/format.ts` must stay covered.
 
