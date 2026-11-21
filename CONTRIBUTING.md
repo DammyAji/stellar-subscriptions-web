@@ -44,6 +44,7 @@ Required environment variables are validated by `scripts/validate-env.ts` before
 ### License policy
 
 `npm run check:licenses` (via `license-checker`) rejects dependencies under GPL-2.0, GPL-3.0, and LGPL-2.0, because copyleft licenses can affect distribution of this app. If a package you need falls under one of these, pick a permissively licensed alternative or raise it with the maintainers before adding the dependency.
+CI runs the same checks, plus `npm run format:check` (the step is named "Check formatting") after lint. Unformatted code fails that step, so run `npm run format` before committing. See [CI and caching](#ci-and-caching) for how the workflow caches dependencies.
 
 If you change behaviour, add or update a test next to the file you changed (`*.test.ts` or `*.test.tsx`). Money-related logic in `lib/subscription.ts` and `lib/format.ts` must stay covered.
 
@@ -57,6 +58,11 @@ If you change behaviour, add or update a test next to the file you changed (`*.t
 - Styling uses Tailwind and the shared classes in `app/globals.css` (`btn-primary`, `btn-secondary`, `btn-danger`, `card`, `text-muted`). Reuse them rather than inventing new button styles.
 - Keep comments short and explain why, not what. Follow the comment density of the file you are editing.
 - Match the surrounding naming and structure. Don't reformat unrelated code.
+- Run `npm run format` before committing. CI runs `npm run format:check` and fails on unformatted code.
+
+## CI and caching
+
+The workflow in `.github/workflows/ci.yml` caches npm dependencies with `actions/setup-node` (`cache: npm`). The cache key is derived from the hash of `package-lock.json`, so any lockfile change invalidates the cache and the next run does a fresh `npm install`. That means you should commit `package-lock.json` whenever dependencies change; otherwise CI may reuse stale `node_modules` and behave differently from your machine.
 
 ## The rule: the UI must never break
 
