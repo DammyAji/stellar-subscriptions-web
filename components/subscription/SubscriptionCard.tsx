@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Subscription } from "@/lib/types";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { useLedger } from "@/lib/ledger";
 import CancelButton from "./CancelButton";
 import PauseButton from "./PauseButton";
 
@@ -17,11 +18,16 @@ export default function SubscriptionCard({ subscription }: Props) {
     currency,
     interval,
     nextChargeAt,
+    startLedger,
     status,
   } = subscription;
 
+  const { currentLedger } = useLedger();
+
   const isActive = status === "active";
   const isPaused = status === "paused";
+  const isFutureStart = currentLedger < startLedger;
+  const startsIn = formatApproxDuration(startLedger - currentLedger);
 
   return (
     <article
@@ -66,7 +72,11 @@ export default function SubscriptionCard({ subscription }: Props) {
         <div>
           <dt className="text-gray-500">Next charge</dt>
           <dd className="font-medium text-gray-900">
-            {isActive ? formatDate(nextChargeAt) : "—"}
+            {isFutureStart
+              ? `Starts in ~${startsIn}`
+              : isActive
+                ? formatDate(nextChargeAt)
+                : "—"}
           </dd>
         </div>
       </dl>

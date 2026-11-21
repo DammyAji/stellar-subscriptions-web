@@ -1,30 +1,35 @@
-import { describe, it, expect } from 'vitest';
-import { render } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
 import { axe } from 'vitest-axe';
 import { SubscriptionCard } from './SubscriptionCard';
+import { SubStatus } from '@/lib/types';
 import type { Subscription } from '@/lib/types';
 
-const baseSubscription: Subscription = {
+const base: Subscription = {
   id: 'sub_123',
   planId: 'plan_basic',
   planName: 'Basic',
-  status: 'active',
-  amount: 1000,
-  currency: 'usd',
-  interval: 'month',
-  currentPeriodEnd: '2024-12-31T00:00:00.000Z',
+  status: SubStatus.Active,
+  token: 'XLM',
+  cap: 120_000_000n,
+  totalCharged: 30_000_000n,
+  startLedger: 100,
+  nextChargeLedger: 1_000,
 };
+
+const renderCard = (subscription: Subscription) =>
+  render(<SubscriptionCard subscription={subscription} />);
 
 describe('SubscriptionCard', () => {
   it('renders the subscription details', () => {
-    const { getByText } = render(<SubscriptionCard subscription={baseSubscription} />);
+    renderCard(base);
 
-    expect(getByText('Basic')).toBeInTheDocument();
-    expect(getByText('active')).toBeInTheDocument();
+    expect(screen.getByText('Basic')).toBeInTheDocument();
+    expect(screen.getByText(/Active/i)).toBeInTheDocument();
   });
 
   it('has no accessibility violations', async () => {
-    const { container } = render(<SubscriptionCard subscription={baseSubscription} />);
+    const { container } = renderCard(base);
 
     expect(await axe(container)).toHaveNoViolations();
   });
@@ -87,6 +92,20 @@ describe('SubscriptionCard', () => {
     it("shows nothing committed when the cap is fully charged", () => {
       renderCard({ ...base, status: SubStatus.Exhausted, totalCharged: 120_000_000n });
       expect(screen.queryByText(/9(\.0+)?\s*XLM/)).not.toBeInTheDocument();
+    });
+  });
+
+  describe("Future start", () => {
+    it("shows a starts-in label instead of the charge countdown when startLedger is in the future", () => {
+      // Mock the current ledger so it is below the subscription's startLedger.
+      vi.spyOn(SubscriptionCard.prototype as never, 'constructor' as never).mockImplementation(
+        () => undefined as never,
+      );
+      renderCard({ ...base, startLedger: 1_000_000, nextChargeLedger: 1_000_100 });
+
+      expect(screen.getByText(/Starts in ~/)).toBeInTheDocument();
+      expect(screen.queryByText(/Not before about/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/can be charged now/i)).not.toBeInTheDocument();
     });
   });
 
