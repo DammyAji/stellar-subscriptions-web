@@ -7,6 +7,7 @@ import {
   decodeStats,
   decodeSubscription,
   getChargeEvents,
+  getTokenInfo,
   toNumber,
 } from "./contracts";
 import { scValToNative, xdr } from "@stellar/stellar-sdk";
@@ -14,6 +15,7 @@ import { SubStatus } from "@/types";
 
 const mockGetEvents = jest.fn();
 const mockGetHealth = jest.fn();
+const mockReadContract = jest.fn();
 
 jest.mock("@stellar/stellar-sdk", () => {
   const actual = jest.requireActual("@stellar/stellar-sdk");
@@ -26,6 +28,17 @@ jest.mock("@stellar/stellar-sdk", () => {
         getHealth: mockGetHealth,
       })),
     },
+    Contract: jest.fn().mockImplementation(() => ({
+      call: jest.fn(),
+    })),
+  };
+});
+
+jest.mock("./stellar", () => {
+  const actual = jest.requireActual("./stellar");
+  return {
+    ...actual,
+    readContract: (...args: unknown[]) => mockReadContract(...args),
   };
 });
 
@@ -309,6 +322,36 @@ function chargedEvent(opts: {
     pagingToken: opts.id,
   };
 }
+
+describe("getTokenInfo", () => {
+  beforeEach(() => {
+    mockReadContract.mockReset();
+  });
+
+  it("deduplicates concurrent calls for the same contract id", async () => {
+    mockReadContract.mockImplementation(async (_network: unknown, _id: unknown, method: string) => {
+      if (method === "symbol") return "USDC";
+      if (method === "name") return "USD Coin";
+      if (method === "decimals") return 7;
+      throw new Error(`unexpected method ${method}`);
+    });
+
+    const [a, b] = await Promise.all([
+      getTokenInfo("testnet", USDC),
+      getTokenInfo("testnet", USDC),
+    ]);
+
+    expect(a).toEqual(b);
+    expect(a).toMatchObject({ symbol: "USDC", name: "USD Coin", decimals: 7 });
+    // symbol, name and decimals — one set of calls, not two.
+    expect(mockReadContract).toHaveBeenCalledTimes(3);
+
+    // Once settled, the cache serves subsequent callers without new calls.
+    const c = await getTokenInfo("testnet", USDC);
+    expect(c).toEqual(a);
+    expect(mockReadContract).toHaveBeenCalledTimes(3);
+  });
+});
 
 describe("getChargeEvents", () => {
   beforeEach(() => {

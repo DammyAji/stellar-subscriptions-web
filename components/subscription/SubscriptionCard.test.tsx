@@ -1,3 +1,8 @@
+import { describe, it, expect, vi } from 'vitest';
+import { render } from '@testing-library/react';
+import { axe } from 'vitest-axe';
+import { SubscriptionCard } from './SubscriptionCard';
+import * as sortModule from '@/lib/sortForDisplay';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import { axe } from 'vitest-axe';
@@ -52,6 +57,23 @@ describe('SubscriptionCard', () => {
     const { container } = render(<SubscriptionCard subscription={baseSubscription} />);
 
     expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it('does not re-sort when re-rendered with the same subscriptions identity', () => {
+    const sortSpy = vi.spyOn(sortModule, 'sortForDisplay');
+    const subscriptions = [baseSubscription];
+
+    const { rerender } = render(<SubscriptionCard subscriptions={subscriptions} />);
+    expect(sortSpy).toHaveBeenCalledTimes(1);
+
+    // Simulate an unrelated state change (e.g. a ledger tick) that re-renders
+    // the parent with the same subscriptions array identity.
+    rerender(<SubscriptionCard subscriptions={subscriptions} />);
+    rerender(<SubscriptionCard subscriptions={subscriptions} />);
+
+    expect(sortSpy).toHaveBeenCalledTimes(1);
+
+    sortSpy.mockRestore();
   });
 
   describe("CapProgress", () => {

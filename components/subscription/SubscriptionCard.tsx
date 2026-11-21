@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { useMemo } from "react";
 import { memo } from "react";
 import { Subscription } from "@/lib/types";
 import { formatCurrency, formatDate } from "@/lib/format";
@@ -57,10 +58,17 @@ function SubscriptionCard({ subscription }: Props) {
     interval,
     nextChargeAt,
     status,
+    address,
+    network,
   } = subscription;
 
   const isActive = status === "active";
   const isPaused = status === "paused";
+
+  const sortedSubscription = useMemo(
+    () => sortForDisplay([subscription]),
+    [subscription, address, network],
+  );
 
   return (
     <article
