@@ -137,7 +137,67 @@ Read hooks are thin wrappers. For example, `useSubscriptions` calls `useAsync(()
 
 Write flows do not use `useAsync`. They use `useTx`.
 
+## Write Pipeline
+
+Every write in the app follows the same path. A component never touches signing, submission or confirmation directly; it hands an action to `useTx`, and the action receives a `WriteCtx` that carries the wallet wiring.
+
+```mermaid
+flowchart LR
+  Run["useTx.run(action)"] --> WC["writeCtx(onPhase)<br/>WalletProvider"]
+  WC --> Action["action(ctx)<br/>e.g. subscribe(ctx, …)"]
+  Action --> Invoke["invokeContract(ctx, …)<br/>lib/stellar.ts"]
+  Invoke --> Sign["ctx.sign(xdr)<br/>Freighter"]
+  Sign --> Submit["sendTransaction"]
+  Submit --> Confirm["getTransaction polling"]
+  Confirm --> Done["{ hash, returnValue }"]
+```
+
+1. **`useTx.run(action)`** (`hooks/useTx.ts`). It clears the previous error, sets the phase to `building`, and calls `action(writeCtx(setPhase))`. When the action resolves it stores the hash, sets the phase to `success` and returns the result. When it throws it stores the message, sets the phase to `error` and resolves to `null`.
+2. **`writeCtx(onPhase)`** (`WalletProvider`). It builds the `WriteCtx` for the connected account: `{ network, source, sign, onPhase }`. `sign` is `signWithFreighter`, and `onPhase` is `useTx`'s setter, so every phase the engine reports lands in `tx.phase`. It throws a readable error when no account is connected or Freighter is on an unknown network.
+3. **The action** (a write in `lib/contracts.ts`, such as `subscribe`). It calls `invokeContract` with the contract ID, method, arguments and the matching error table, and converts `returnValue` into whatever the caller needs.
+4. **`invokeContract(ctx, …)`** (`lib/stellar.ts`). It runs the steps below in order, reporting each one through `ctx.onPhase`.
+5. **Freighter sign.** The prepared XDR goes to `ctx.sign`, which asks the user to approve it in Freighter. A decline becomes a `WalletError` and nothing is sent.
+6. **Submit.** `sendTransaction` sends the signed envelope. `ERROR` and `TRY_AGAIN_LATER` become a `ContractError`.
+7. **Confirm.** `getTransaction` is polled every 2 seconds for up to 60 seconds. A confirmed transaction returns `{ hash, returnValue }`; a timeout throws the "Still waiting for the network to confirm" error.
+
+Because simulation runs during `building`, before `signing`, a contract rejection shows up as a message before the wallet is ever asked to sign.
+
+### Phase state machine
+
+`TxPhase` moves forward only. `useTx` starts each run at `building` and ends it at `success` or `error`.
+
+```mermaid
+stateDiagram-v2
+  [*] --> idle
+  idle --> building: run(action)
+  building --> checking: charge() only
+  checking --> building: isChargeable passes
+  checking --> error: not chargeable
+  building --> signing: simulation ok
+  building --> error: simulation rejected / build failed
+  signing --> submitting: user approves
+  signing --> error: user declines / wallet error
+  submitting --> confirming: sendTransaction accepted
+  submitting --> error: ERROR / TRY_AGAIN_LATER
+  confirming --> success: confirmed
+  confirming --> error: timeout / failed
+  success --> [*]
+  error --> [*]
+```
+
+- `idle`: no write has run yet. `useTx` reports this before the first `run`.
+- `building`: load the source account, build the transaction, simulate it, and assemble the prepared transaction.
+- `checking`: only `charge` uses it. It calls `isChargeable` on-chain first and refuses to send if the contract would refuse. No other write sets this phase.
+- `signing`: the XDR is with Freighter, waiting for the user.
+- `submitting`: the signed transaction has been sent to RPC.
+- `confirming`: polling the ledger for the result.
+- `success`: the transaction is confirmed. `tx.hash` is set and `TxProgress` shows an explorer link.
+- `error`: the write failed. `tx.error` holds a sentence safe to show, and `TxProgress` renders it with `role="alert"`.
+
+`TxProgress` renders this state. It shows the step list while in progress, a success line with an explorer link, or the error message. It accepts `withCheck` to include the `checking` step, but nothing passes `true` today.
+
 ## Trace: subscribe, from click to transaction
+=======
 
 This is the path a new contributor should be able to follow end to end.
 

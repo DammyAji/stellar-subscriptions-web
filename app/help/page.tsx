@@ -126,6 +126,19 @@ export default function HelpPage() {
         </div>
       </section>
 
+      <section id="tokens" aria-labelledby="tokens-heading" className="space-y-3">
+        <h2 id="tokens-heading" className="text-lg font-semibold text-fg">
+          Which tokens plans can use
+        </h2>
+        <p className="text-sm text-muted">
+          Plans can be priced in any SEP-41 token, including native XLM through its Stellar Asset Contract. Read{" "}
+          <Link href="/docs/token-support.md" className="text-brand hover:underline">
+            token support
+          </Link>{" "}
+          to learn what is accepted and how to find a token&apos;s contract id.
+        </p>
+      </section>
+
       <p className="text-sm text-muted">
         Ready to look at a plan? <Link href="/plans" className="text-brand hover:underline">Browse plans</Link>.
       </p>
