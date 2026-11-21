@@ -107,7 +107,17 @@ export const arg = {
 
 const RETRIES = 3;
 
-/** Public RPC nodes rate-limit bursts; retry those, never contract errors. */
+/**
+ * Run `fn`, retrying transient RPC failures with exponential back-off.
+ *
+ * Public RPC nodes rate-limit bursts, so a call is attempted at most
+ * `RETRIES` (3) times. Between attempts it waits
+ * `300ms × 2^attempt + jitter`, where jitter is up to 200ms of random delay
+ * (so roughly 300–500ms, then 600–800ms). Only transient errors are retried:
+ * HTTP 429 / rate-limit responses, timeouts, and network / fetch failures.
+ * Anything else — contract errors in particular — is rethrown immediately,
+ * as is the last transient error once the attempts are exhausted.
+ */
 async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
   let lastError: unknown;
   for (let attempt = 0; attempt < RETRIES; attempt++) {
@@ -128,6 +138,14 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** A Soroban contract id is a 56-character strkey starting with `C`. */
+const CONTRACT_ID_RE = /^C[A-Z2-7]{55}$/;
+
+/** True when `id` looks like a valid Soroban contract id. */
+export function isContractId(id: string): boolean {
+  return CONTRACT_ID_RE.test(id);
+}
+
 /**
  * Call a contract function read-only by simulating it. Nothing is signed or
  * submitted. Returns the decoded native value.
@@ -139,6 +157,9 @@ export async function readContract<T>(
   args: xdr.ScVal[],
   errors: ErrorTable,
 ): Promise<T> {
+  if (!isContractId(contractId)) {
+    throw new ContractError("Invalid contract id");
+  }
   const source = NETWORKS[network].readAccount;
   if (!source) {
     throw new ContractError(`Reading from ${NETWORKS[network].label} isn't configured.`);

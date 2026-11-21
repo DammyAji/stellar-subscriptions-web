@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { explainError, walkEvents, withRetry } from "./stellar";
+import { ContractError, explainError, readContract, withRetry } from "./stellar";
 
 describe("withRetry", () => {
   beforeEach(() => {
@@ -56,6 +57,17 @@ describe("withRetry", () => {
     await assertion;
 
     expect(fn).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("readContract", () => {
+  it("rejects malformed contract ids without a network call", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+    await expect(readContract("not-a-contract-id")).rejects.toThrow(ContractError);
+    await expect(readContract("not-a-contract-id")).rejects.toThrow(/Invalid contract id/);
+
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
 
