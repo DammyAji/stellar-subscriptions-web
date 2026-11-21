@@ -278,7 +278,35 @@ export async function getRegistryStats(network: Network): Promise<RegistryStats>
 
 // ---- token reads ----
 
+/** Cap on cached token metadata so a page rendering many tokens can't grow it forever. */
+export const TOKEN_CACHE_LIMIT = 100;
+
+/**
+ * A `Map` used as an LRU: insertion order is recency order, so the first key
+ * is the least recently used. `get` refreshes recency; `set` evicts the oldest
+ * entry once the cap is reached.
+ */
 const tokenCache = new Map<string, Promise<TokenInfo>>();
+
+function cacheGet(key: string): Promise<TokenInfo> | undefined {
+  const cached = tokenCache.get(key);
+  if (cached !== undefined) {
+    // Re-insert so this key becomes the most recently used.
+    tokenCache.delete(key);
+    tokenCache.set(key, cached);
+  }
+  return cached;
+}
+
+function cacheSet(key: string, value: Promise<TokenInfo>): void {
+  tokenCache.delete(key);
+  tokenCache.set(key, value);
+  while (tokenCache.size > TOKEN_CACHE_LIMIT) {
+    const oldest = tokenCache.keys().next().value;
+    if (oldest === undefined) break;
+    tokenCache.delete(oldest);
+  }
+}
 
 /** A SEP-41 contract id: `C` followed by 55 base-32 characters. */
 const CONTRACT_ID_RE = /^C[A-Z2-7]{55}$/;
@@ -306,7 +334,7 @@ export function getTokenInfo(network: Network, token: string): Promise<TokenInfo
     );
   }
   const key = `${network}:${contractId}`;
-  let cached = tokenCache.get(key);
+  let cached = cacheGet(key);
   if (!cached) {
     cached = (async () => {
       let symbol: string;
@@ -329,7 +357,7 @@ export function getTokenInfo(network: Network, token: string): Promise<TokenInfo
       return { contractId, symbol: display, name, decimals: Number(decimals) };
     })();
     cached.catch(() => tokenCache.delete(key));
-    tokenCache.set(key, cached);
+    cacheSet(key, cached);
   }
   return cached;
 }

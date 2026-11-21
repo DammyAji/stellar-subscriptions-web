@@ -7,6 +7,8 @@ import {
   decodeStats,
   decodeSubscription,
   getChargeEvents,
+  getTokenMetadata,
+  tokenCacheSize,
   toNumber,
 } from "./contracts";
 import { scValToNative, xdr } from "@stellar/stellar-sdk";
@@ -175,6 +177,21 @@ describe("decoder fixtures", () => {
     expect(() => decodeSubscription({ ...rest, cap_total: cap })).toThrow();
     const { total_plans: plans, ...stats } = fixture(STATS_XDR);
     expect(() => decodeStats({ ...stats, plan_count: plans })).toThrow();
+  });
+});
+
+describe("token metadata cache", () => {
+  it("caps the cache at 100 entries and evicts the oldest", async () => {
+    const ids = Array.from(
+      { length: 150 },
+      (_, i) => `C${String(i).padStart(55, "0")}`,
+    );
+    for (const id of ids) {
+      await getTokenMetadata(id, "testnet");
+    }
+    expect(tokenCacheSize()).toBeLessThanOrEqual(100);
+    // The earliest ids were evicted; the most recent ones remain cached.
+    expect(tokenCacheSize()).toBe(100);
   });
 });
 
