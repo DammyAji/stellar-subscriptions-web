@@ -38,7 +38,13 @@ const SECTIONS = [
       "Only you, the subscriber, can pause, resume or cancel a subscription. While it is paused, no charge can happen. Resume it to allow charges again.",
       "Cancelling is permanent for charges: once you cancel, no further charges can ever happen on that subscription.",
     ],
+    link: {
+      href: "/docs/subscription-lifecycle.md",
+      label: "Read the full subscription lifecycle",
+      text: "See every subscription status, what causes each transition, which are reversible, and what happens to funds in each state.",
+    },
   },
+=======
   {
     id: "failed-charge",
     title: "What happens when a charge fails",
@@ -84,6 +90,15 @@ export default function HelpPage() {
               {paragraph}
             </p>
           ))}
+          {section.link ? (
+            <p className="text-sm text-muted">
+              {section.link.text}{" "}
+              <Link href={section.link.href} className="text-brand hover:underline">
+                {section.link.label}
+              </Link>
+              .
+            </p>
+          ) : null}
         </section>
       ))}
 
