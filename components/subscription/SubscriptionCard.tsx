@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Subscription } from "@/lib/types";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { usePlan } from "@/lib/hooks/usePlan";
 import CancelButton from "./CancelButton";
 import PauseButton from "./PauseButton";
 
@@ -11,6 +12,7 @@ type Props = {
 export default function SubscriptionCard({ subscription }: Props) {
   const {
     id,
+    planId,
     planName,
     merchantName,
     amount,
@@ -19,6 +21,10 @@ export default function SubscriptionCard({ subscription }: Props) {
     nextChargeAt,
     status,
   } = subscription;
+
+  const { data: plan, isLoading, error } = usePlan(
+    planId !== 0 ? planId : null,
+  );
 
   const isActive = status === "active";
   const isPaused = status === "paused";
@@ -42,6 +48,15 @@ export default function SubscriptionCard({ subscription }: Props) {
             </Link>
           </h3>
           <p className="text-sm text-gray-600">{merchantName}</p>
+          {planId !== 0 && (
+            <p className="text-xs text-gray-500">
+              {isLoading
+                ? "Loading plan…"
+                : error
+                  ? "Plan unavailable"
+                  : plan?.name}
+            </p>
+          )}
         </div>
         <span
           className={

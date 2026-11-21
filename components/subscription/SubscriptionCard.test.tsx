@@ -1,8 +1,15 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render } from '@testing-library/react';
 import { axe } from 'vitest-axe';
 import { SubscriptionCard } from './SubscriptionCard';
 import type { Subscription } from '@/lib/types';
+import { usePlan } from '@/hooks/usePlans';
+
+vi.mock('@/hooks/usePlans', () => ({
+  usePlan: vi.fn(),
+}));
+
+const mockedUsePlan = vi.mocked(usePlan);
 
 const baseSubscription: Subscription = {
   id: 'sub_123',
@@ -16,6 +23,13 @@ const baseSubscription: Subscription = {
 };
 
 describe('SubscriptionCard', () => {
+  beforeEach(() => {
+    mockedUsePlan.mockReset();
+    mockedUsePlan.mockReturnValue({ plan: null, isLoading: false, error: null } as ReturnType<
+      typeof usePlan
+    >);
+  });
+
   it('renders the subscription details', () => {
     const { getByText } = render(<SubscriptionCard subscription={baseSubscription} />);
 
@@ -27,6 +41,60 @@ describe('SubscriptionCard', () => {
     const { container } = render(<SubscriptionCard subscription={baseSubscription} />);
 
     expect(await axe(container)).toHaveNoViolations();
+  });
+
+  describe('plan name', () => {
+    it('does not render a plan name and requests null when planId is 0', () => {
+      const { queryByTestId } = render(
+        <SubscriptionCard subscription={{ ...baseSubscription, planId: 0 }} />,
+      );
+
+      expect(mockedUsePlan).toHaveBeenCalledWith(null);
+      expect(queryByTestId('plan-name')).not.toBeInTheDocument();
+    });
+
+    it('renders the plan name as a secondary label when planId is non-zero', () => {
+      mockedUsePlan.mockReturnValue({
+        plan: { id: 42, name: 'Pro Plan' },
+        isLoading: false,
+        error: null,
+      } as ReturnType<typeof usePlan>);
+
+      const { getByTestId } = render(
+        <SubscriptionCard subscription={{ ...baseSubscription, planId: 42 }} />,
+      );
+
+      expect(mockedUsePlan).toHaveBeenCalledWith(42);
+      expect(getByTestId('plan-name')).toHaveTextContent('Pro Plan');
+    });
+
+    it('shows a loading placeholder while the plan is loading', () => {
+      mockedUsePlan.mockReturnValue({
+        plan: null,
+        isLoading: true,
+        error: null,
+      } as ReturnType<typeof usePlan>);
+
+      const { getByTestId } = render(
+        <SubscriptionCard subscription={{ ...baseSubscription, planId: 42 }} />,
+      );
+
+      expect(getByTestId('plan-name-loading')).toBeInTheDocument();
+    });
+
+    it('shows a graceful message when the plan fails to load', () => {
+      mockedUsePlan.mockReturnValue({
+        plan: null,
+        isLoading: false,
+        error: new Error('boom'),
+      } as ReturnType<typeof usePlan>);
+
+      const { getByTestId } = render(
+        <SubscriptionCard subscription={{ ...baseSubscription, planId: 42 }} />,
+      );
+
+      expect(getByTestId('plan-name-error')).toHaveTextContent('Plan unavailable');
+    });
   });
 
   describe("CapProgress", () => {
