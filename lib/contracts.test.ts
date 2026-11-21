@@ -12,6 +12,8 @@ import {
 } from "./contracts";
 import { scValToNative, xdr } from "@stellar/stellar-sdk";
 import { SubStatus } from "@/types";
+import { ContractError } from "./contracts";
+import { planFixture, registryStatsFixture } from "@/test/mocks/fixtures";
 
 const mockGetEvents = jest.fn();
 const mockGetHealth = jest.fn();
@@ -123,6 +125,46 @@ describe("decoders", () => {
 
   it("refuses ids too large to represent exactly", () => {
     expect(() => toNumber(2n ** 60n)).toThrow(/too large/);
+  });
+
+  it("throws ContractError for values near Number.MAX_SAFE_INTEGER", () => {
+    expect(() => toNumber(BigInt(Number.MAX_SAFE_INTEGER) + 1n)).toThrow(ContractError);
+    expect(() => toNumber(2n ** 60n)).toThrow(ContractError);
+  });
+});
+
+describe("decoder round-trips", () => {
+  it("round-trips a plan fixture through decodePlan", () => {
+    const plan = decodePlan(planFixture);
+    expect(plan).toEqual({
+      id: 3,
+      merchant: MERCHANT,
+      name: "Demo hourly",
+      token: XLM,
+      amountPerPeriod: 10_000_000n,
+      intervalLedgers: 720,
+      defaultCap: 120_000_000n,
+      active: true,
+      createdAt: 4_692_990,
+    });
+  });
+
+  it("round-trips a registry stats fixture through decodeStats", () => {
+    const stats = decodeStats(registryStatsFixture);
+    expect(stats).toEqual({
+      totalPlans: 1,
+      totalSubscriptions: 2,
+      activeSubscriptions: 1,
+      totalChargedVolume: 10_000_000n,
+    });
+  });
+
+  it("throws ContractError when totalChargedVolume is oversized", () => {
+    const oversized = {
+      ...registryStatsFixture,
+      total_charged_volume: BigInt(Number.MAX_SAFE_INTEGER) + 1n,
+    };
+    expect(() => decodeStats(oversized)).toThrow(ContractError);
   });
 });
 
