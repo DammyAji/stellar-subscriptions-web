@@ -107,7 +107,17 @@ export const arg = {
 
 const RETRIES = 3;
 
-/** Public RPC nodes rate-limit bursts; retry those, never contract errors. */
+/**
+ * Run `fn`, retrying transient RPC failures with exponential back-off.
+ *
+ * Public RPC nodes rate-limit bursts, so a call is attempted at most
+ * `RETRIES` (3) times. Between attempts it waits
+ * `300ms × 2^attempt + jitter`, where jitter is up to 200ms of random delay
+ * (so roughly 300–500ms, then 600–800ms). Only transient errors are retried:
+ * HTTP 429 / rate-limit responses, timeouts, and network / fetch failures.
+ * Anything else — contract errors in particular — is rethrown immediately,
+ * as is the last transient error once the attempts are exhausted.
+ */
 async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
   let lastError: unknown;
   for (let attempt = 0; attempt < RETRIES; attempt++) {
