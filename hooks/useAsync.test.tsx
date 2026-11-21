@@ -97,6 +97,29 @@ describe("useAsync", () => {
       expect(result.current.data).toBe("second-result");
     });
   });
+
+  it("re-runs the loader when refetch is called", async () => {
+    const loader = vi
+      .fn<[], Promise<string>>()
+      .mockResolvedValueOnce("first-result")
+      .mockResolvedValueOnce("second-result");
+
+    const { result } = renderHook(() => useAsync(loader, []));
+
+    await waitFor(() => {
+      expect(result.current.data).toBe("first-result");
+    });
+    expect(loader).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      result.current.refetch();
+    });
+
+    expect(loader).toHaveBeenCalledTimes(2);
+    await waitFor(() => {
+      expect(result.current.data).toBe("second-result");
+    });
+  });
 });
 
 const readSubscriptions = vi.fn();

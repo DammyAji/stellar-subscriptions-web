@@ -426,6 +426,7 @@ describe("getChargeEvents", () => {
         chargedEvent({ id: "1-2", ledger: 4_100_100, amount: 5_000_000n }),
       ],
       cursor: "1-2",
+      latestLedger: 4_100_100,
     });
 
     const result = await getChargeEvents({ merchant: MERCHANT, network: "testnet" });
@@ -448,12 +449,14 @@ describe("getChargeEvents", () => {
       .mockResolvedValueOnce({
         events: [chargedEvent({ id: "1-1", ledger: 4_100_000, amount: 1n })],
         cursor: "1-1",
+        latestLedger: 4_100_100,
       })
       .mockResolvedValueOnce({
         events: [chargedEvent({ id: "1-2", ledger: 4_100_100, amount: 2n })],
         cursor: "1-2",
+        latestLedger: 4_100_100,
       })
-      .mockResolvedValueOnce({ events: [], cursor: "1-2" });
+      .mockResolvedValueOnce({ events: [], cursor: "1-2", latestLedger: 4_100_100 });
 
     const result = await getChargeEvents({ merchant: MERCHANT, network: "testnet" });
 
@@ -468,6 +471,7 @@ describe("getChargeEvents", () => {
         chargedEvent({ id: "1-2", ledger: 4_100_100, token: USDC, amount: 3_000_000n }),
       ],
       cursor: "1-2",
+      latestLedger: 4_100_100,
     });
 
     const result = await getChargeEvents({ merchant: MERCHANT, network: "testnet" });

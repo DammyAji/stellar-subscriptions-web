@@ -13,9 +13,9 @@ import {
   NETWORKS,
   arg,
   getEventWindow,
-  getServer,
   invokeContract,
   readContract,
+  walkEvents,
   type ErrorTable,
   type WriteCtx,
 } from "@/lib/stellar";
@@ -541,27 +541,12 @@ export function deactivatePlan(ctx: WriteCtx, planId: number): Promise<TxResult>
 
 // ---- events ----
 
-const PAGE_SIZE = 200;
-/**
- * RPC nodes scan roughly 10,000 ledgers per request, so a full ~7-day window
- * takes about 13 pages. This bounds the walk if a node behaves differently.
- */
-const MAX_PAGES = 40;
 /**
  * The node's oldest retained ledger advances every few seconds; starting a
  * little inside the window avoids "startLedger must be within the ledger
  * range" when it moves between our two requests.
  */
 const WINDOW_MARGIN = 200;
-
-/**
- * The ledger an events cursor points at. Cursors are
- * `<TOID>-<event index>`, and a TOID keeps the ledger sequence in its top 32
- * bits.
- */
-export function cursorLedger(cursor: string): number {
-  return Number(BigInt(cursor.split("-")[0]) >> 32n);
-}
 
 export function decodeChargeEvent(event: rpc.Api.EventResponse): ChargeEvent {
   const data = scValToNative(event.value) as Raw;
@@ -609,16 +594,8 @@ export async function getChargeEvents(
   ];
 
   const fromLedger = oldest + WINDOW_MARGIN;
-  const events: ChargeEvent[] = [];
-  let page = await server.getEvents({ startLedger: fromLedger, filters, limit: PAGE_SIZE });
-  events.push(...page.events.map(decodeChargeEvent));
-  // A short or even empty page only means this request's scan range ended,
-  // so keep following the cursor until it reaches the latest ledger.
-  for (let n = 1; n < MAX_PAGES && cursorLedger(page.cursor) < page.latestLedger; n++) {
-    page = await server.getEvents({ cursor: page.cursor, filters, limit: PAGE_SIZE });
-    events.push(...page.events.map(decodeChargeEvent));
-  }
-  return { events, fromLedger, latestLedger: page.latestLedger };
+  const { events, latestLedger } = await walkEvents(server, filters, decodeChargeEvent, fromLedger);
+  return { events, fromLedger, latestLedger };
 }
 
 /**
