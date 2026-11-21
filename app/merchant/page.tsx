@@ -10,6 +10,7 @@ import { useWallet } from '@/hooks/useWallet';
 import { useMerchantPlans } from '@/hooks/useMerchantPlans';
 import { useToken } from '@/hooks/useToken';
 import { getTokenBalance } from '@/lib/token';
+import { MerchantChargedToday } from '@/components/merchant/ChargedToday';
 
 const SHARE_FLAG_KEY = 'merchant:hasSharedPlanLink';
 
@@ -139,6 +140,8 @@ export default function MerchantDashboardPage() {
             Create a plan
           </Link>
         </header>
+
+        {address && <MerchantChargedToday merchant={address} />}
 
         {showChecklist && (
           <section
