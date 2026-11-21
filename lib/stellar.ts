@@ -138,6 +138,14 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** A Soroban contract id is a 56-character strkey starting with `C`. */
+const CONTRACT_ID_RE = /^C[A-Z2-7]{55}$/;
+
+/** True when `id` looks like a valid Soroban contract id. */
+export function isContractId(id: string): boolean {
+  return CONTRACT_ID_RE.test(id);
+}
+
 /**
  * Call a contract function read-only by simulating it. Nothing is signed or
  * submitted. Returns the decoded native value.
@@ -149,6 +157,9 @@ export async function readContract<T>(
   args: xdr.ScVal[],
   errors: ErrorTable,
 ): Promise<T> {
+  if (!isContractId(contractId)) {
+    throw new ContractError("Invalid contract id");
+  }
   const source = NETWORKS[network].readAccount;
   if (!source) {
     throw new ContractError(`Reading from ${NETWORKS[network].label} isn't configured.`);
