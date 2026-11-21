@@ -2,6 +2,8 @@
 
 import { useCallback, useMemo } from 'react';
 
+import { useToken } from '@/hooks/useToken';
+
 export interface Subscriber {
   address: string;
   tokenSymbol: string;
@@ -58,6 +60,27 @@ function escapeCsvField(value: string): string {
   return value;
 }
 
+/** Shorten a contract id for display while the token symbol is loading. */
+function shortenAddress(address: string): string {
+  if (address.length <= 10) {
+    return address;
+  }
+  return `${address.slice(0, 4)}…${address.slice(-4)}`;
+}
+
+interface TokenSymbolProps {
+  tokenAddress: string;
+}
+
+/**
+ * Renders the token symbol resolved via `useToken`, falling back to a shortened
+ * contract id while loading or if the symbol cannot be resolved.
+ */
+function TokenSymbol({ tokenAddress }: TokenSymbolProps) {
+  const { symbol } = useToken(tokenAddress);
+  return <>{symbol ?? shortenAddress(tokenAddress)}</>;
+}
+
 function buildCsv(subscribers: Subscriber[]): string {
   const header = [
     'Subscriber Address',
@@ -101,6 +124,12 @@ export default function SubscriberTable({ subscribers, fileName = 'subscribers.c
             : subscriber.rawAmount,
         formattedDisplay: `${formatAmount(subscriber.rawAmount, subscriber.decimals)} ${subscriber.tokenSymbol}`,
       })),
+    [subscribers],
+  );
+
+  // Unique token contract ids, so each token's symbol is resolved once.
+  const uniqueTokenAddresses = useMemo(
+    () => Array.from(new Set(subscribers.map((subscriber) => subscriber.tokenAddress))),
     [subscribers],
   );
 
@@ -151,7 +180,9 @@ export default function SubscriberTable({ subscribers, fileName = 'subscribers.c
                 <td>
                   <code>{row.address}</code>
                 </td>
-                <td>{row.tokenSymbol}</td>
+                <td>
+                  <TokenSymbol tokenAddress={row.tokenAddress} />
+                </td>
                 <td>
                   <code>{row.tokenAddress}</code>
                 </td>
@@ -165,6 +196,13 @@ export default function SubscriberTable({ subscribers, fileName = 'subscribers.c
           )}
         </tbody>
       </table>
+
+      {/* Resolve each unique token's symbol once; results are cached by useToken. */}
+      <div hidden aria-hidden="true">
+        {uniqueTokenAddresses.map((tokenAddress) => (
+          <TokenSymbol key={tokenAddress} tokenAddress={tokenAddress} />
+        ))}
+      </div>
     </div>
   );
 }
