@@ -250,6 +250,54 @@ export async function getLatestLedger(network: Network): Promise<number> {
   return res.sequence;
 }
 
+/** Events fetched per page by {@link walkEvents}. */
+export const PAGE_SIZE = 200;
+/** Upper bound on pages walked by {@link walkEvents}. */
+export const MAX_PAGES = 40;
+/** Ledgers of slack subtracted when computing an event window start. */
+export const WINDOW_MARGIN = 100;
+
+/**
+ * The ledger encoded in a paging cursor. Cursors are `toid` values: the
+ * ledger sequence shifted left by 32 bits, plus a transaction/op index.
+ */
+export function cursorLedger(cursor: string): number {
+  return Math.floor(Number(BigInt(cursor) >> 32n));
+}
+
+/**
+ * Walk a contract's events from `startLedger` forward, page by page, decoding
+ * each event with `decoder`. Stops once the cursor catches up with the latest
+ * ledger or after {@link MAX_PAGES} pages.
+ */
+export async function walkEvents<T>(
+  server: rpc.Server,
+  filters: rpc.Api.EventFilter[],
+  decoder: (event: rpc.Api.EventResponse) => T,
+  startLedger: number,
+): Promise<{ events: T[]; latestLedger: number }> {
+  const events: T[] = [];
+  let cursor: string | undefined;
+  let latestLedger = startLedger;
+
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const res = await withRetry(() =>
+      server.getEvents({
+        startLedger: cursor ? undefined : startLedger,
+        cursor,
+        filters,
+        limit: PAGE_SIZE,
+      }),
+    );
+    latestLedger = res.latestLedger;
+    for (const event of res.events) events.push(decoder(event));
+    if (!res.cursor || cursorLedger(res.cursor) >= res.latestLedger) break;
+    cursor = res.cursor;
+  }
+
+  return { events, latestLedger };
+}
+
 /** Oldest and latest ledger the RPC node still holds events for. */
 export async function getEventWindow(network: Network): Promise<{ oldest: number; latest: number }> {
   const health = await withRetry(() => getServer(network).getHealth());

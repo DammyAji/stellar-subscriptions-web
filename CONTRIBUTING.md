@@ -92,6 +92,29 @@ Use this checklist in your PR description for any change that starts, changes, p
 - [ ] Changed money logic has a unit test in `lib/`.
 - [ ] Changed money UI has a component test that checks the rendered wording for the cap and the schedule.
 
+## Versioning policy
+
+The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) (`MAJOR.MINOR.PATCH`). Every release is recorded in [`CHANGELOG.md`](CHANGELOG.md), which uses the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
+
+- **MAJOR** — breaking changes. Anything that would force a user, integrator, or deployment to change how they use the app or its contract bindings: a changed contract interface, a renamed or removed environment variable, a changed meaning of a stored value, or a removed feature.
+- **MINOR** — backwards-compatible features. New screens, new helpers, new optional configuration.
+- **PATCH** — backwards-compatible fixes. Bug fixes, copy corrections, dependency bumps that change no behaviour.
+
+### Changelog entries
+
+Every PR that changes behaviour adds an entry under `## [Unreleased]` in `CHANGELOG.md`, in the matching section (`Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`). PRs that only touch docs, tests, or formatting do not need an entry. Write the entry for the reader of the release notes, not for the reviewer of the diff.
+
+### Marking breaking changes
+
+If your PR contains a breaking change:
+
+1. Title it with a `!` after the type, for example `feat!: rename NEXT_PUBLIC_CONTRACT_ID`.
+2. Add a `BREAKING CHANGE:` footer to the commit body that says what breaks and what to do instead.
+3. Put the entry under `### Changed` or `### Removed` in `## [Unreleased]` and start it with **BREAKING:**.
+4. Call it out in the PR description so the maintainer can pick the next MAJOR version.
+
+Maintainers move `## [Unreleased]` entries into a new version heading when they cut a release, and tag the commit with the matching version.
+
 ## Pull requests
 
 1. Branch from `main`. Use a short name that says what changes.
@@ -99,6 +122,7 @@ Use this checklist in your PR description for any change that starts, changes, p
 3. Run the four checks above and make sure they pass.
 4. Describe what changed and why. For money-moving UI, include the checklist above.
 5. Attach screenshots at phone and laptop widths for any visible change.
+6. Add a `CHANGELOG.md` entry under `## [Unreleased]` if the PR changes behaviour, and flag breaking changes as described in the [versioning policy](#versioning-policy).
 
 ## Reporting security issues
 
