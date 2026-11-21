@@ -1,7 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render } from '@testing-library/react';
 import { axe } from 'vitest-axe';
 import { SubscriptionCard } from './SubscriptionCard';
+import * as sortModule from '@/lib/sortForDisplay';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, act } from '@testing-library/react';
+import { axe } from 'vitest-axe';
+import SubscriptionCard from './SubscriptionCard';
+import { SubStatus } from '@/lib/types';
 import type { Subscription } from '@/lib/types';
 import { usePlan } from '@/hooks/usePlans';
 
@@ -10,6 +17,13 @@ vi.mock('@/hooks/usePlans', () => ({
 }));
 
 const mockedUsePlan = vi.mocked(usePlan);
+
+// Mock the ledger hook so tests can drive the current ledger number.
+const ledgerState = vi.hoisted(() => ({ current: 1000 }));
+
+vi.mock('@/lib/hooks/useLedger', () => ({
+  useLedger: () => ledgerState.current,
+}));
 
 const baseSubscription: Subscription = {
   id: 'sub_123',
@@ -22,12 +36,26 @@ const baseSubscription: Subscription = {
   currentPeriodEnd: '2024-12-31T00:00:00.000Z',
 };
 
+const base: Subscription = {
+  ...baseSubscription,
+  status: SubStatus.Active,
+  token: 'XLM',
+  cap: 120_000_000n,
+  totalCharged: 30_000_000n,
+  nextChargeLedger: 1200,
+};
+
+function renderCard(subscription: Subscription) {
+  return render(<SubscriptionCard subscription={subscription} />);
+}
+
 describe('SubscriptionCard', () => {
   beforeEach(() => {
     mockedUsePlan.mockReset();
     mockedUsePlan.mockReturnValue({ plan: null, isLoading: false, error: null } as ReturnType<
       typeof usePlan
     >);
+    ledgerState.current = 1000;
   });
 
   it('renders the subscription details', () => {
@@ -95,6 +123,21 @@ describe('SubscriptionCard', () => {
 
       expect(getByTestId('plan-name-error')).toHaveTextContent('Plan unavailable');
     });
+  it('does not re-sort when re-rendered with the same subscriptions identity', () => {
+    const sortSpy = vi.spyOn(sortModule, 'sortForDisplay');
+    const subscriptions = [baseSubscription];
+
+    const { rerender } = render(<SubscriptionCard subscriptions={subscriptions} />);
+    expect(sortSpy).toHaveBeenCalledTimes(1);
+
+    // Simulate an unrelated state change (e.g. a ledger tick) that re-renders
+    // the parent with the same subscriptions array identity.
+    rerender(<SubscriptionCard subscriptions={subscriptions} />);
+    rerender(<SubscriptionCard subscriptions={subscriptions} />);
+
+    expect(sortSpy).toHaveBeenCalledTimes(1);
+
+    sortSpy.mockRestore();
   });
 
   describe("CapProgress", () => {
@@ -182,6 +225,53 @@ describe('SubscriptionCard', () => {
     it("says none once the cap is fully charged", () => {
       renderCard({ ...base, status: SubStatus.Exhausted, totalCharged: 120_000_000n });
       expect(screen.getByText(/Nothing more can be taken/)).toBeInTheDocument();
+    });
+  });
+
+  describe("re-render behaviour", () => {
+    it("only re-renders the card whose countdown changes when the ledger advances", () => {
+      const nearCard = { ...base, id: "sub_near", nextChargeLedger: 1001 };
+      const farCard = { ...base, id: "sub_far", nextChargeLedger: 5000 };
+
+      const nearRender = vi.fn();
+      const farRender = vi.fn();
+
+      function TrackedCard({
+        subscription,
+        onRender,
+      }: {
+        subscription: Subscription;
+        onRender: () => void;
+      }) {
+        onRender();
+        return <SubscriptionCard subscription={subscription} />;
+      }
+
+      const { rerender } = render(
+        <>
+          <TrackedCard subscription={nearCard} onRender={nearRender} />
+          <TrackedCard subscription={farCard} onRender={farRender} />
+        </>,
+      );
+
+      const nearInitial = nearRender.mock.calls.length;
+      const farInitial = farRender.mock.calls.length;
+
+      // Advance the ledger by one block: only the near card's countdown changes.
+      ledgerState.current = 1001;
+      act(() => {
+        rerender(
+          <>
+            <TrackedCard subscription={nearCard} onRender={nearRender} />
+            <TrackedCard subscription={farCard} onRender={farRender} />
+          </>,
+        );
+      });
+
+      // The near card's displayed countdown changed, so it re-renders.
+      expect(nearRender.mock.calls.length).toBeGreaterThan(nearInitial);
+      // The far card's countdown is unchanged, so memo skips its render.
+      expect(farRender.mock.calls.length).toBe(farInitial);
     });
   });
 });

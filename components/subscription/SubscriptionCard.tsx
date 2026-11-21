@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { useMemo } from "react";
+import { memo } from "react";
 import { Subscription } from "@/lib/types";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { usePlan } from "@/lib/hooks/usePlan";
@@ -7,9 +9,47 @@ import PauseButton from "./PauseButton";
 
 type Props = {
   subscription: Subscription;
+  currentLedger?: number;
 };
 
-export default function SubscriptionCard({ subscription }: Props) {
+/**
+ * Buckets the remaining ledgers so that the comparator only treats a ledger
+ * tick as a change when the displayed countdown text would actually change.
+ */
+function countdownBucket(
+  nextChargeLedger: number | undefined,
+  currentLedger: number | undefined,
+): number {
+  if (nextChargeLedger === undefined || currentLedger === undefined) {
+    return 0;
+  }
+  return Math.max(0, nextChargeLedger - currentLedger);
+}
+
+export function arePropsEqual(prev: Props, next: Props): boolean {
+  const a = prev.subscription;
+  const b = next.subscription;
+
+  if (
+    a.id !== b.id ||
+    a.planName !== b.planName ||
+    a.merchantName !== b.merchantName ||
+    a.amount !== b.amount ||
+    a.currency !== b.currency ||
+    a.interval !== b.interval ||
+    a.nextChargeAt !== b.nextChargeAt ||
+    a.status !== b.status
+  ) {
+    return false;
+  }
+
+  return (
+    countdownBucket(a.nextChargeLedger, prev.currentLedger) ===
+    countdownBucket(b.nextChargeLedger, next.currentLedger)
+  );
+}
+
+function SubscriptionCard({ subscription }: Props) {
   const {
     id,
     planId,
@@ -20,6 +60,8 @@ export default function SubscriptionCard({ subscription }: Props) {
     interval,
     nextChargeAt,
     status,
+    address,
+    network,
   } = subscription;
 
   const { data: plan, isLoading, error } = usePlan(
@@ -28,6 +70,11 @@ export default function SubscriptionCard({ subscription }: Props) {
 
   const isActive = status === "active";
   const isPaused = status === "paused";
+
+  const sortedSubscription = useMemo(
+    () => sortForDisplay([subscription]),
+    [subscription, address, network],
+  );
 
   return (
     <article
@@ -99,3 +146,8 @@ export default function SubscriptionCard({ subscription }: Props) {
     </article>
   );
 }
+
+const MemoizedSubscriptionCard = memo(SubscriptionCard, arePropsEqual);
+
+export { MemoizedSubscriptionCard as SubscriptionCard };
+export default MemoizedSubscriptionCard;
