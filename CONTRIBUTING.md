@@ -64,6 +64,10 @@ If you change behaviour, add or update a test next to the file you changed (`*.t
 
 The workflow in `.github/workflows/ci.yml` caches npm dependencies with `actions/setup-node` (`cache: npm`). The cache key is derived from the hash of `package-lock.json`, so any lockfile change invalidates the cache and the next run does a fresh `npm install`. That means you should commit `package-lock.json` whenever dependencies change; otherwise CI may reuse stale `node_modules` and behave differently from your machine.
 
+## Plan cache invalidation
+
+Plans are cached in `PLAN_CACHE`. Any write that creates or deactivates a plan must call `invalidatePlans` afterwards, or the UI will keep showing stale plan data. See the JSDoc on `invalidatePlans` in [`hooks/usePlans.ts`](hooks/usePlans.ts) for the full list of operations that must call it.
+
 ## The rule: the UI must never break
 
 **The app must never imply that a merchant can charge more than the cap, or charge off schedule.** The subscription contract enforces both limits:

@@ -442,6 +442,8 @@ export interface CreatePlanInput {
   defaultCap: bigint;
 }
 
+// Callers must call `invalidatePlans` (hooks/usePlans.ts) after this succeeds:
+// creating a plan changes the plan cache.
 export async function createPlan(ctx: WriteCtx, input: CreatePlanInput): Promise<TxResult & { id: number }> {
   const result = await invokeContract(
     ctx,
@@ -463,6 +465,9 @@ export async function createPlan(ctx: WriteCtx, input: CreatePlanInput): Promise
 /**
  * Close a plan to new subscribers. Existing subscriptions are untouched: they
  * keep charging exactly as their subscribers authorized. This cannot be undone.
+ *
+ * Callers must call `invalidatePlans` (hooks/usePlans.ts) after this succeeds:
+ * deactivating a plan changes the plan cache.
  */
 export function deactivatePlan(ctx: WriteCtx, planId: number): Promise<TxResult> {
   return invokeContract(
