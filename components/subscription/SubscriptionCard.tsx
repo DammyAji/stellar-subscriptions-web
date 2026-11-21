@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import { memo } from "react";
 import { Subscription } from "@/lib/types";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { useLedger } from "@/lib/ledger";
 import { usePlan } from "@/lib/hooks/usePlan";
 import CancelButton from "./CancelButton";
 import PauseButton from "./PauseButton";
@@ -59,17 +60,21 @@ function SubscriptionCard({ subscription }: Props) {
     currency,
     interval,
     nextChargeAt,
+    startLedger,
     status,
     address,
     network,
   } = subscription;
 
+  const { currentLedger } = useLedger();
   const { data: plan, isLoading, error } = usePlan(
     planId !== 0 ? planId : null,
   );
 
   const isActive = status === "active";
   const isPaused = status === "paused";
+  const isFutureStart = currentLedger < startLedger;
+  const startsIn = formatApproxDuration(startLedger - currentLedger);
 
   const sortedSubscription = useMemo(
     () => sortForDisplay([subscription]),
@@ -128,7 +133,11 @@ function SubscriptionCard({ subscription }: Props) {
         <div>
           <dt className="text-gray-500">Next charge</dt>
           <dd className="font-medium text-gray-900">
-            {isActive ? formatDate(nextChargeAt) : "—"}
+            {isFutureStart
+              ? `Starts in ~${startsIn}`
+              : isActive
+                ? formatDate(nextChargeAt)
+                : "—"}
           </dd>
         </div>
       </dl>
